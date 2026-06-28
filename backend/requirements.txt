@@ -1,0 +1,11 @@
+# JobFit backend dependencies
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+httpx>=0.27.0          # required by FastAPI TestClient
+pytest>=8.0.0
+python-jobspy>=1.1.4
+pandas>=2.0.0          # transitive dep of python-jobspy; listed explicitly for clarity
+
+# Install separately — requires CUDA build flags:
+# pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+# llama-cpp-python

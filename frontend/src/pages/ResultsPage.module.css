@@ -1,0 +1,48 @@
+.page {
+  padding: 40px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.backLink {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.errorBox {
+  padding: 16px;
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.4);
+  border-radius: 8px;
+  color: #c53030;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.empty {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.jobList {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}

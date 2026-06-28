@@ -1,0 +1,9 @@
+{
+  "target_titles": ["Software Engineer", "Backend Developer"],
+  "location": "Paris, France",
+  "country": "France",
+  "language": "en",
+  "keywords_include": ["Python", "API"],
+  "keywords_exclude": ["sales", "junior"],
+  "max_jobs": 5
+}
