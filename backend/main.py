@@ -3,17 +3,37 @@ JobFit FastAPI backend entry point.
 """
 import json
 import os
+import sqlite3
 from contextlib import asynccontextmanager
-from typing import List
+from datetime import datetime, timezone
+from typing import Generator, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import database
 
+# Lazy import — resolved at call time so the module can be loaded without jobspy
+# installed (e.g. in unit-test environments). Tests patch ``main.scrape_jobs``.
+try:
+    from jobspy import scrape_jobs
+except ImportError:  # pragma: no cover — only happens when jobspy is absent
+
+    def scrape_jobs(*args, **kwargs):  # type: ignore[misc]
+        raise RuntimeError(
+            "python-jobspy is not installed. Run: pip install python-jobspy"
+        )
+
 # Path to the search config file (relative to the repo root, one level above backend/)
 SEARCH_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "search_config.json")
+
+# Paths validated before each pipeline run (relative to repo root)
+REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+PERSONA_PATH = os.path.join(REPO_ROOT, "persona.json")
+BASE_CV_PATH = os.path.join(REPO_ROOT, "input", "base_cv.txt")
+BASE_COVER_LETTER_PATH = os.path.join(REPO_ROOT, "input", "base_cover_letter.txt")
 
 # Sensible defaults returned when search_config.json does not exist
 _SEARCH_CONFIG_DEFAULTS = {
@@ -35,6 +55,41 @@ class SearchConfig(BaseModel):
     keywords_include: List[str] = []
     keywords_exclude: List[str] = []
     max_jobs: int = 5
+
+
+def filter_jobs(jobs: list[dict], config: dict) -> list[dict]:
+    """Pure keyword pre-filter.
+
+    Include logic: if ``keywords_include`` is non-empty, a job must have at
+    least one keyword (case-insensitive) in its title or description to pass.
+    If the list is empty, all jobs pass the include step.
+
+    Exclude logic: if ``keywords_exclude`` is non-empty, a job is dropped if
+    its title or description contains any of those keywords (case-insensitive).
+    If the list is empty, nothing is dropped.
+    """
+    include_kws = [k.lower() for k in config.get("keywords_include", []) if k]
+    exclude_kws = [k.lower() for k in config.get("keywords_exclude", []) if k]
+
+    filtered = []
+    for job in jobs:
+        text = " ".join(
+            str(job.get(field) or "") for field in ("title", "description")
+        ).lower()
+
+        if include_kws and not any(kw in text for kw in include_kws):
+            continue
+        if exclude_kws and any(kw in text for kw in exclude_kws):
+            continue
+
+        filtered.append(job)
+
+    return filtered
+
+
+def _sse_event(payload: dict) -> str:
+    """Format a single SSE data line."""
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 @asynccontextmanager
@@ -88,6 +143,113 @@ def put_search_config(config: SearchConfig) -> SearchConfig:
         json.dump(config_data, f, indent=2, ensure_ascii=False)
 
     return config
+
+
+@app.post("/run")
+def run_pipeline() -> StreamingResponse:
+    """Start the job-search pipeline and stream progress via SSE."""
+
+    def _stream() -> Generator[str, None, None]:
+        # ── Pre-run validation ───────────────────────────────────────────────
+        missing = []
+        for label, path in [
+            ("persona.json", PERSONA_PATH),
+            ("input/base_cv.txt", BASE_CV_PATH),
+            ("input/base_cover_letter.txt", BASE_COVER_LETTER_PATH),
+        ]:
+            if not os.path.exists(path):
+                missing.append(label)
+
+        if missing:
+            yield _sse_event({
+                "event": "run_failed",
+                "message": f"Missing required files: {', '.join(missing)}",
+            })
+            return
+
+        yield _sse_event({"event": "run_started"})
+
+        # ── Load search config ────────────────────────────────────────────────
+        if os.path.exists(SEARCH_CONFIG_PATH):
+            with open(SEARCH_CONFIG_PATH, "r", encoding="utf-8") as f:
+                config = {**_SEARCH_CONFIG_DEFAULTS, **json.load(f)}
+        else:
+            config = dict(_SEARCH_CONFIG_DEFAULTS)
+
+        yield _sse_event({"event": "scraping_started"})
+
+        # ── Scrape ────────────────────────────────────────────────────────────
+        try:
+            titles = config.get("target_titles", [])
+            search_term = " OR ".join(titles) if titles else ""
+            df = scrape_jobs(
+                site_name=["indeed"],
+                search_term=search_term,
+                location=config.get("location", ""),
+                results_wanted=200,
+                hours_old=24,
+                country_indeed=config.get("country", ""),
+            )
+
+            # Normalise to list[dict] — jobspy returns a DataFrame
+            if hasattr(df, "to_dict"):
+                raw_jobs = df.to_dict(orient="records")
+            elif isinstance(df, list):
+                raw_jobs = df
+            else:
+                raw_jobs = list(df)
+
+        except Exception as exc:
+            yield _sse_event({"event": "run_failed", "message": str(exc)})
+            return
+
+        # ── Store raw jobs ────────────────────────────────────────────────────
+        conn = sqlite3.connect(database.DEFAULT_DB_PATH)
+        cursor = conn.cursor()
+
+        # Create a placeholder run record so we have a run_id for the jobs
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute(
+            "INSERT INTO runs (date, jobs_found, jobs_after_filter, status) VALUES (?, ?, ?, ?)",
+            (now_iso, len(raw_jobs), 0, "scraping"),
+        )
+        run_id = cursor.lastrowid
+
+        for job in raw_jobs:
+            cursor.execute(
+                """INSERT INTO jobs
+                   (run_id, title, company, location, description, url, salary)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    run_id,
+                    str(job.get("title") or ""),
+                    str(job.get("company") or ""),
+                    str(job.get("location") or ""),
+                    str(job.get("description") or ""),
+                    str(job.get("job_url") or job.get("url") or ""),
+                    str(job.get("min_amount") or job.get("salary") or ""),
+                ),
+            )
+
+        conn.commit()
+
+        yield _sse_event({"event": "scraping_complete", "count": len(raw_jobs)})
+
+        # ── Keyword pre-filter ────────────────────────────────────────────────
+        filtered = filter_jobs(raw_jobs, config)
+
+        # Update run record with post-filter count
+        cursor.execute(
+            "UPDATE runs SET jobs_found = ?, jobs_after_filter = ?, status = ? WHERE id = ?",
+            (len(raw_jobs), len(filtered), "scraped", run_id),
+        )
+        conn.commit()
+        conn.close()
+
+        yield _sse_event({"event": "filtering_complete", "count": len(filtered)})
+        yield _sse_event({"event": "run_complete", "run_id": run_id})
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
 
 
 if __name__ == "__main__":
