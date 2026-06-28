@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import DocumentSection from './DocumentSection.jsx'
 import styles from './JobCard.module.css'
 
 const API_BASE = 'http://localhost:8000'
+
+// Sentinel used to distinguish "file not found on disk" from other errors
+const FILE_NOT_FOUND = '__FILE_NOT_FOUND__'
 
 export default function JobCard({ job, runId }) {
   const [cvExpanded, setCvExpanded] = useState(false)
@@ -16,9 +19,13 @@ export default function JobCard({ job, runId }) {
     if (cvContent !== null) return
     setCvLoading(true)
     fetch(`${API_BASE}/runs/${runId}/jobs/${job.id}/cv`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 404) return Promise.resolve({ _notFound: true })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data) => {
-        setCvContent(data.content)
+        setCvContent(data._notFound ? FILE_NOT_FOUND : data.content)
         setCvLoading(false)
       })
       .catch(() => {
@@ -31,9 +38,13 @@ export default function JobCard({ job, runId }) {
     if (clContent !== null) return
     setClLoading(true)
     fetch(`${API_BASE}/runs/${runId}/jobs/${job.id}/cover-letter`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 404) return Promise.resolve({ _notFound: true })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((data) => {
-        setClContent(data.content)
+        setClContent(data._notFound ? FILE_NOT_FOUND : data.content)
         setClLoading(false)
       })
       .catch(() => {

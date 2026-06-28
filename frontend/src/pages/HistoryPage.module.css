@@ -1,0 +1,120 @@
+.page {
+  padding: 40px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.navLink {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  text-decoration: underline;
+}
+
+.errorBox {
+  padding: 16px;
+  background: rgba(255, 59, 59, 0.1);
+  border: 1px solid rgba(255, 59, 59, 0.4);
+  border-radius: 8px;
+  color: #c53030;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.empty {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.inlineLink {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.runList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.runCard {
+  display: block;
+  padding: 16px 20px;
+  background: var(--card-bg, #1e1e2e);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.runCard:hover {
+  border-color: var(--accent, #7c8cf8);
+  box-shadow: 0 0 0 2px rgba(124, 140, 248, 0.15);
+}
+
+.runInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.runDate {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.runMeta {
+  font-size: 13px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+}
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badgeComplete {
+  background: rgba(22, 163, 74, 0.15);
+  color: #16a34a;
+}
+
+.badgeScored {
+  background: rgba(124, 140, 248, 0.15);
+  color: #7c8cf8;
+}
+
+.badgeScraped {
+  background: rgba(202, 138, 4, 0.15);
+  color: #ca8a04;
+}
+
+.badgePending {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+}

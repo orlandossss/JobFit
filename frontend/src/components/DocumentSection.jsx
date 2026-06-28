@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import styles from './DocumentSection.module.css'
 
+// Must match the sentinel used in JobCard.jsx
+const FILE_NOT_FOUND = '__FILE_NOT_FOUND__'
+
 export default function DocumentSection({ label, content, loading, filename }) {
   const [copied, setCopied] = useState(false)
 
+  const isFileMissing = content === FILE_NOT_FOUND
+  const hasContent = content && !isFileMissing
+
   function handleCopy() {
-    if (!content) return
+    if (!hasContent) return
     navigator.clipboard.writeText(content).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -13,7 +19,7 @@ export default function DocumentSection({ label, content, loading, filename }) {
   }
 
   function handleDownload() {
-    if (!content) return
+    if (!hasContent) return
     const blob = new Blob([content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -31,7 +37,7 @@ export default function DocumentSection({ label, content, loading, filename }) {
           <button
             className={styles.actionButton}
             onClick={handleCopy}
-            disabled={!content || loading}
+            disabled={!hasContent || loading}
             title="Copy to clipboard"
           >
             {copied ? 'Copied!' : 'Copy'}
@@ -39,7 +45,7 @@ export default function DocumentSection({ label, content, loading, filename }) {
           <button
             className={styles.actionButton}
             onClick={handleDownload}
-            disabled={!content || loading}
+            disabled={!hasContent || loading}
             title={`Download as ${filename}`}
           >
             Download
@@ -49,7 +55,9 @@ export default function DocumentSection({ label, content, loading, filename }) {
 
       {loading ? (
         <div className={styles.loading}>Loading...</div>
-      ) : content ? (
+      ) : isFileMissing ? (
+        <div className={styles.fileNotFound}>File not found on disk.</div>
+      ) : hasContent ? (
         <pre className={styles.docText}>{content}</pre>
       ) : (
         <div className={styles.empty}>No content available.</div>

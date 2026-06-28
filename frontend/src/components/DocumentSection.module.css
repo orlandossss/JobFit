@@ -73,3 +73,10 @@
   font-size: 14px;
   font-style: italic;
 }
+
+.fileNotFound {
+  padding: 16px;
+  color: #ca8a04;
+  font-size: 14px;
+  font-style: italic;
+}
