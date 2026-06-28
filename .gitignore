@@ -1,0 +1,30 @@
+# Personal data — never commit
+input/
+output/
+persona.json
+search_config.json
+llm_config.json
+
+# SQLite database
+backend/jobfit.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
