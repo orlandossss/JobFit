@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import database
+from agents import score_job
 
 # Lazy import — resolved at call time so the module can be loaded without jobspy
 # installed (e.g. in unit-test environments). Tests patch ``main.scrape_jobs``.
@@ -247,6 +248,64 @@ def run_pipeline() -> StreamingResponse:
         conn.close()
 
         yield _sse_event({"event": "filtering_complete", "count": len(filtered)})
+
+        # ── LLM scoring ───────────────────────────────────────────────────────
+        with open(PERSONA_PATH, "r", encoding="utf-8") as f:
+            persona = json.load(f)
+
+        conn = sqlite3.connect(database.DEFAULT_DB_PATH)
+        cursor = conn.cursor()
+
+        # Fetch the DB rows for filtered jobs so we can update score/reasoning.
+        # We match by run_id + title (good enough — titles are unique per scrape).
+        # Cap at 50 to avoid excessively long runs.
+        jobs_to_score = filtered[:50]
+
+        scored_jobs = []  # list of (db_id, score) for ranking
+        for job in jobs_to_score:
+            result = score_job(persona, job)
+            score_val = result["score"]
+            reasoning_val = result["reasoning"]
+
+            # Locate the job row in SQLite (run_id + title is the natural key here)
+            cursor.execute(
+                "SELECT id FROM jobs WHERE run_id = ? AND title = ? LIMIT 1",
+                (run_id, str(job.get("title") or "")),
+            )
+            row = cursor.fetchone()
+            if row:
+                db_id = row[0]
+                cursor.execute(
+                    "UPDATE jobs SET score = ?, reasoning = ? WHERE id = ?",
+                    (score_val, reasoning_val, db_id),
+                )
+                scored_jobs.append((db_id, score_val))
+
+            yield _sse_event({
+                "event": "scoring_job",
+                "title": str(job.get("title") or ""),
+                "score": score_val,
+            })
+
+        conn.commit()
+
+        # ── Select top N ──────────────────────────────────────────────────────
+        max_jobs = int(config.get("max_jobs", 5))
+        scored_jobs.sort(key=lambda x: x[1], reverse=True)
+        top_n = scored_jobs[:max_jobs]
+
+        for db_id, _ in top_n:
+            cursor.execute("UPDATE jobs SET selected = 1 WHERE id = ?", (db_id,))
+
+        # Update run record
+        cursor.execute(
+            "UPDATE runs SET jobs_selected = ?, status = ? WHERE id = ?",
+            (len(top_n), "scored", run_id),
+        )
+        conn.commit()
+        conn.close()
+
+        yield _sse_event({"event": "scoring_complete", "count": len(top_n)})
         yield _sse_event({"event": "run_complete", "run_id": run_id})
 
     return StreamingResponse(_stream(), media_type="text/event-stream")

@@ -164,9 +164,13 @@ def client_missing_persona(tmp_path, monkeypatch):
     return TestClient(m.app)
 
 
+_FAKE_SCORE = {"score": 5, "reasoning": "Average match."}
+
+
 def test_post_run_returns_text_event_stream(client_with_all_files):
     with patch("main.scrape_jobs", return_value=_make_fake_df()):
-        response = client_with_all_files.post("/run")
+        with patch("main.score_job", return_value=_FAKE_SCORE):
+            response = client_with_all_files.post("/run")
 
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
@@ -174,7 +178,8 @@ def test_post_run_returns_text_event_stream(client_with_all_files):
 
 def test_post_run_emits_expected_sse_events(client_with_all_files):
     with patch("main.scrape_jobs", return_value=_make_fake_df()):
-        response = client_with_all_files.post("/run")
+        with patch("main.score_job", return_value=_FAKE_SCORE):
+            response = client_with_all_files.post("/run")
 
     events = parse_sse_events(response.text)
     event_names = [e["event"] for e in events]
@@ -209,7 +214,8 @@ def test_post_run_scraping_complete_event_has_count(client_with_all_files):
     ])
     client = client_with_all_files
     with patch("main.scrape_jobs", return_value=fake_df):
-        response = client.post("/run")
+        with patch("main.score_job", return_value=_FAKE_SCORE):
+            response = client.post("/run")
 
     events = parse_sse_events(response.text)
     scraping_complete = next(e for e in events if e["event"] == "scraping_complete")
