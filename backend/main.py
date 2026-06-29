@@ -5,9 +5,11 @@ import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import database
 
@@ -19,6 +21,31 @@ _DEFAULT_PERSONA_PATH = Path(__file__).parent.parent / "persona.json"
 def _persona_path() -> Path:
     env_override = os.environ.get("PERSONA_PATH")
     return Path(env_override) if env_override else _DEFAULT_PERSONA_PATH
+
+
+# Path to the search config file (relative to the repo root, one level above backend/)
+SEARCH_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "search_config.json")
+
+# Sensible defaults returned when search_config.json does not exist
+_SEARCH_CONFIG_DEFAULTS = {
+    "target_titles": [],
+    "location": "",
+    "country": "",
+    "language": "en",
+    "keywords_include": [],
+    "keywords_exclude": [],
+    "max_jobs": 5,
+}
+
+
+class SearchConfig(BaseModel):
+    target_titles: List[str] = []
+    location: str = ""
+    country: str = ""
+    language: str = "en"
+    keywords_include: List[str] = []
+    keywords_exclude: List[str] = []
+    max_jobs: int = 5
 
 
 @asynccontextmanager
@@ -66,6 +93,34 @@ def get_persona() -> dict:
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     return data
+
+
+@app.get("/search-config", response_model=SearchConfig)
+def get_search_config() -> SearchConfig:
+    """Return the current search configuration.
+
+    If search_config.json does not exist, returns sensible empty defaults.
+    """
+    if not os.path.exists(SEARCH_CONFIG_PATH):
+        return SearchConfig(**_SEARCH_CONFIG_DEFAULTS)
+
+    with open(SEARCH_CONFIG_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return SearchConfig(**{**_SEARCH_CONFIG_DEFAULTS, **data})
+
+
+@app.put("/search-config", response_model=SearchConfig)
+def put_search_config(config: SearchConfig) -> SearchConfig:
+    """Write updated search configuration to disk and return the saved config."""
+    config_data = config.model_dump()
+
+    os.makedirs(os.path.dirname(os.path.abspath(SEARCH_CONFIG_PATH)), exist_ok=True)
+
+    with open(SEARCH_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+    return config
 
 
 if __name__ == "__main__":
