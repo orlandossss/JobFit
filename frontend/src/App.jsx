@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import PersonaPage from './PersonaPage'
 
 const BACKEND_URL = 'http://localhost:8000'
 
-function App() {
+function HomePage() {
   const [backendStatus, setBackendStatus] = useState('checking...')
 
   useEffect(() => {
@@ -13,10 +14,7 @@ function App() {
   }, [])
 
   return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: 640, margin: '80px auto', padding: '0 24px' }}>
-      <h1>JobFit</h1>
-      <p>Local job application automation — placeholder dashboard.</p>
-
+    <div>
       <section style={{ marginTop: 32 }}>
         <h2>Backend status</h2>
         <p>
@@ -34,6 +32,49 @@ function App() {
       </section>
     </div>
   )
+}
+
+function App() {
+  const [page, setPage] = useState('home')
+
+  return (
+    <div style={{ fontFamily: 'sans-serif', maxWidth: 640, margin: '80px auto', padding: '0 24px' }}>
+      <h1>JobFit</h1>
+      <p>Local job application automation — placeholder dashboard.</p>
+
+      <nav style={{ marginTop: 16, display: 'flex', gap: 16 }}>
+        <button
+          onClick={() => setPage('home')}
+          style={navBtnStyle(page === 'home')}
+        >
+          Home
+        </button>
+        <button
+          onClick={() => setPage('persona')}
+          style={navBtnStyle(page === 'persona')}
+        >
+          Persona
+        </button>
+      </nav>
+
+      <div style={{ marginTop: 24 }}>
+        {page === 'home' && <HomePage />}
+        {page === 'persona' && <PersonaPage />}
+      </div>
+    </div>
+  )
+}
+
+function navBtnStyle(active) {
+  return {
+    padding: '6px 14px',
+    cursor: 'pointer',
+    background: active ? '#0070f3' : '#eee',
+    color: active ? '#fff' : '#333',
+    border: 'none',
+    borderRadius: 4,
+    fontWeight: active ? 600 : 400,
+  }
 }
 
 export default App
